@@ -16,7 +16,7 @@
 			$.mobile.listview.prototype.options.theme = "d";	
 			$.mobile.collapsible.prototype.options.theme = "b";		
 			$.mobile.collapsible.prototype.options.contentTheme = "c";
-			$.mobile.defaultPageTransition = "slide";
+			$.mobile.defaultPageTransition = "fade";
 			if (localStorage.length <= 1) {
 				localStorage.setItem('timeout', 8000);
 				localStorage.setItem('httpretries', 1);
@@ -54,7 +54,7 @@
 	<body>
 <div data-role="page" id="page">
 		<div data-role="header" data-position="fixed" data-tap-toggle="false">
-		<a href="#setup" data-transition="slidedown" data-role="button" data-icon="gear" data-iconpos="notext"
+		<a href="#setup" data-role="button" data-icon="gear" data-iconpos="notext"
 			class="ui-btn-left" data-iconshadow="false"></a>
 		<h1 id="hostname"></h1>
 		<a data-role="button" data-icon="refresh" data-iconpos="notext" data-iconshadow="false" class="ui-btn-right"
@@ -117,10 +117,10 @@
 			</div>
 	</div>
 		<div data-role="footer" data-position="fixed" data-tap-toggle="false">
-		<a href="#info"  data-transition="slideup" data-role="button" data-icon="info" data-iconpos="notext" 
+		<a href="#info" data-role="button" data-icon="info" data-iconpos="notext" 
 			class="ui-btn-left" data-iconshadow="false"></a>
 		<h1 id="footertxt"></h1>
-		<a href="#doc"  data-transition="slideup" data-role="button" data-icon="search" data-iconpos="notext"
+		<a href="#doc" data-role="button" data-icon="search" data-iconpos="notext"
 			class="ui-btn-right"data-iconshadow="false"></a>
 
 	</div>
@@ -219,7 +219,7 @@
 	</div>
 <div data-role="page" id="info">
 		<div data-role="header" data-position="fixed" data-tap-toggle="false">
-		<h1>m-Apex v1.00</h1>
+		<h1>m-Apex v1.01</h1>
 	</div>
 		<div data-role="content">
 		<h2>Software License Agreement</h2>
@@ -337,7 +337,6 @@ var retry = 0;
 var maxretries = localStorage.getItem('httpretries');
 var initialized = false;
 var sensoropen = false;
-var busy = 0;
 var lastStatusUpdate = new Date(0);
 var imageupdatecount = 0;
 var sensordata = {names:[],record:[]};	
@@ -373,7 +372,6 @@ $('#Outlets').on("change", $("input[type='radio']"), function (event, ui) {
 	var dev = name.replace('_state', '');
 	var s = name + "=" + val + "&noResponse=1";
 	$.mobile.loading('show', {text:'Sending command...', textVisible:true});
-	busy++;
 	$.post("/cgi-bin/status.cgi", s, function (data) {
 		if (val == "0") {
 			lastStatusUpdate = new Date(0);
@@ -385,9 +383,7 @@ $('#Outlets').on("change", $("input[type='radio']"), function (event, ui) {
 		}
 	})
 		.always(function () {
-			busy--;
-			if (busy == 0)$.mobile.loading('hide');
-			;
+			$.mobile.loading('hide');
 		})
 		.fail(function (jqXHR, textStatus, errorThrown) {
 			alert(textStatus);
@@ -461,11 +457,16 @@ $(document).on(
 			.css('left', (e.pageX + 20) + 'px');
 	});
 function getsensordata(callback){
-	$.mobile.loading('show', {text:'Updating...', textVisible:true});
+	var initstring = "Updating";
+	if (retry > 0) {
+		initstring = initstring + " " + retry;
+	}
+	initstring += "...";
+	$.mobile.loading('show', {text:initstring, textVisible:true});
 	var timenow = new Date();
 	var timeincr = 0;
-	timenow.setDate(timenow.getDate()-1);
-	if (sensordata.record.length>0) {
+	timenow.setDate(timenow.getDate() - 1);
+	if (sensordata.record.length > 0) {
 		timeincr = calculateLogInterval();
 		$.each(sensordata.record, function(i,r) {
 			var currentTime = new Date(r.date);
@@ -507,12 +508,21 @@ function getsensordata(callback){
 		if (typeof callback == "function") callback();
 	})
 	.fail(function (jqXHR, textStatus, errorThrown) {
-		console.log(textStatus);
-		setTimeout(getsensordata, 1000);
+			if (retry >= maxretries) {
+				alert('unable to connect to apex.');
+				retry = 0;
+				return;
+			}
+			retry++;
+			console.log(textStatus);
+			setTimeout(getsensordata, 1);
 	})
 	.always( function() {
 		$.mobile.loading('hide');
-	});	
+	})
+	.done(function (f) {
+			retry = 0;
+	});
 }
 function loadoutlog() {
 	var initstring = "Loading";
@@ -521,7 +531,6 @@ function loadoutlog() {
 	}
 	initstring += "...";
 	$.mobile.loading('show', {text:initstring, textVisible:true});
-	busy++;
 	var timenow = new Date();
 	timenow.setDate(timenow.getDate()-1);
 	$.each(outlogdata.record, function(i,r) {
@@ -559,13 +568,13 @@ function loadoutlog() {
 		});
 		$('#outloglist').listview('refresh');	  
 	}).always(function () {
-		busy--;
-		if (busy == 0)$.mobile.loading('hide');
+		$.mobile.loading('hide');
 	})
 	.fail(function (jqXHR, textStatus, errorThrown) {
 		if (retry >= maxretries) {
 			alert('unable to connect to apex.');
 			retry = 0;
+			history.back();			
 			return;
 		}
 		retry++;
@@ -591,8 +600,8 @@ function calculateLogInterval() {
 			interval = timeval-curtimeval;	
 			timeval = curtimeval;
 		}
-	} else
-		return 60000; //1 minute
+	}
+	return 60000; //1 minute
 }
 function loadsensor() {
 	$.each(sensordata.record, function(i,rec){
@@ -627,12 +636,10 @@ function setFeed(i) {
 	initstring = initstring + String.fromCharCode(65 + i);
 	initstring += "...";
 	$.mobile.loading('show', {text:initstring, textVisible:true});
-	busy++;
 	$.post("/cgi-bin/status.cgi", s, function (f) {
 	})
 		.always(function () {
-			busy--;
-			if (busy == 0)$.mobile.loading('hide');
+			$.mobile.loading('hide');
 		})
 		.fail(function (jqXHR, textStatus, errorThrown) {
 			alert(textStatus);
@@ -659,11 +666,9 @@ function updateStatus(spark) {
 	}
 	initstring += "...";
 	$.mobile.loading('show', {text:initstring, textVisible:true});
-	busy++;
 	$.getJSON(url)
 		.always(function () {
-			busy--;
-			if (busy == 0)$.mobile.loading('hide');
+			$.mobile.loading('hide');
 		})
 		.fail(function (jqXHR, textStatus, errorThrown) {
 			if (retry >= maxretries) {
@@ -776,10 +781,10 @@ function getSparkData() {
 		$.each(sensordata.record, function(j,rec) {
 			c[j] = parseFloat(rec.data[i]);
 			if (c[j] > max_) {
-				max_ = c[j]
+				max_ = c[j];
 			}
 			if (c[j] < min_) {
-				min_ = c[j]
+				min_ = c[j];
 			}
 			total_ += c[j];
 		});
@@ -841,13 +846,11 @@ function initPage() {
 	}
 	initstring += "...";
 	$.mobile.loading('show', {text:initstring, textVisible:true});
-	busy++;
 	var url = "/cgi-bin/status.json?_=" + Math.random();
 
 	$.getJSON(url)
 		.always(function () {
-			busy--;
-			if (busy == 0) $.mobile.loading('hide');
+			$.mobile.loading('hide');
 		})
 		.fail(function (jqXHR, textStatus, errorThrown) {
 			if (retry >= maxretries) {
@@ -914,6 +917,7 @@ function saveSetup() {
 	alert("Saved Settings.");
 	initialized = false;
 	maxretries = localStorage.getItem('httpretries');
+	history.back();
 }
 </script>
 </body>
