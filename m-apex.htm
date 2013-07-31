@@ -157,7 +157,10 @@
 				<div data-role="collapsible">
 				<h2>Setup</h2>
 				<p>This program will work as is with the default Setup values.</p>
-				<p>If you use a webcam on your aquarium, you can enter the URL to retrieve a jpg image.</p>
+				<p>If you use a webcam on your aquarium, you can enter the URL to retrieve a jpg or mjpeg image.</p>
+				<p>For Foscam compatible cameras, use this URL for image http://host:port/snapshot.cgi
+				   and this URL for server push mjpeg http://host:port/videostream.cgi?resolution=8&rate=11</p>
+				<p><strong>Do not use server push if you do not have unlimited data plan on your mobile device!!!</strong></p>
 				<p>The Connection Timeout is the number of seconds before the browser will disconnect if Apex does not
 						respond, and Connection Retries is the number
 						of times to retry in case of a failed connection. A spinner status will be displayed during a
@@ -219,7 +222,7 @@
 	</div>
 <div data-role="page" id="info">
 		<div data-role="header" data-position="fixed" data-tap-toggle="false">
-		<h1>m-Apex v1.01</h1>
+		<h1>m-Apex v1.02</h1>
 	</div>
 		<div data-role="content">
 		<h2>Software License Agreement</h2>
@@ -392,20 +395,34 @@ $('#Outlets').on("change", $("input[type='radio']"), function (event, ui) {
 });
 $('#webcam').on('collapse',function () {
 	imageupdatecount = 0;
+	$('#camImg').off('load error');
+	$('#camImg').attr('src','');
+	$.mobile.loading('hide');
 }).on('expand', function () {
 	var wcurl = getwebcamurl();
+		var videopush = false;
 	if (wcurl != "") {
+			if (wcurl.indexOf("videostream.cgi")!= -1) {
+				 videopush = true;
+				 if ($(window).width()>320)
+					 $('#camImg').removeAttr('width');
+				 else
+				   $('#camImg').attr('width','290px');
+			} else {
+			   $('#camImg').attr('width','290px');
+			}
 		$.mobile.loading('show', {text:'Loading Image...', textVisible:true});
+			var firstparam = wcurl.indexOf('?')==-1;
+			$('#camImg').attr('src', wcurl + (firstparam?'?':'&') +'_=' + Math.random() );
 		$('#camImg').one('load error', function (e) {
 			$.mobile.loading('hide');
 			if (e.type == 'error') {
 				alert('Unable to load image.');
 				$('#playbtn').button('disable');
 			} else {
-				$('#playbtn').button('enable');
+					$('#playbtn').button(videopush?'disable':'enable');
 			}
 		});
-		$('#camImg').attr('src', wcurl + '?_=' + Math.random());
 	} else {
 		$('#camImg').attr('src', '');
 		$('#playbtn').button('disable');
@@ -810,7 +827,7 @@ function reloadImage() {
 		$('#playbtn').text('Play');
 		$('#playbtn').button('enable');
 		$('#playbtn').button('refresh');
-		$('#camImg').off('load');
+		$('#camImg').off('load error');
 		return;
 	}
 	var wcurl = getwebcamurl();
@@ -818,7 +835,8 @@ function reloadImage() {
 		$('#playbtn').text('Play ' + imageupdatecount);
 		$('#playbtn').button('refresh');
 		imageupdatecount--;
-		$('#camImg').attr('src', wcurl + '?' + Math.random());
+		var firstparam = wcurl.indexOf('?')==-1;
+		$('#camImg').attr('src', wcurl + (firstparam?'?':'&') + '_=' + Math.random());
 	}
 }
 function getwebcamurl() {
